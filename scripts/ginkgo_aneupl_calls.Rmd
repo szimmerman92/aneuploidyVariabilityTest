@@ -1,0 +1,134 @@
+---
+title: "Visualization of Chromosomal Copy Number obtained from Whole Genome Sequencing of Fibroblasts"
+author: "Daniel Piqué"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+## Goal
+
+Plot distribution of CNV calls from whole genome sequencing within fibroblasts treated with different stressors. 
+
+## Project Background
+
+The CNV calls used in this analysis come from Ginkgo ([Garvin and Schatz, Nat. Methods, 2015](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4775251/)), a recent method and web-based application that specializes in CNV calls from low-coverage DNA-sequencing in single cells. The Ginkgo output for this project is available [here](http://qb.cshl.edu/ginkgo/?q=results/IXNnDZQoQrLmexttBGP9), and the specific copy number file used in this analysis is available [here](http://qb.cshl.edu/ginkgo/uploads/IXNnDZQoQrLmexttBGP9/SegCopy?uniq=1838932). Ginkgo is appropriate as the coverage in this experiment is very low (<0.1x) and we are working with single cells. 
+
+General notes about aneuploidy (written in collaboration with Sam and Jess) are available [here](https://docs.google.com/document/d/1CJbvdZtk_0etFWD352B2qvC-dVAeRw8iNXxROs_Zp4U/edit?usp=sharing).
+
+## Methods
+
+```{r setup, warning=FALSE, message=FALSE}
+library(RColorBrewer)
+library(tidyverse)
+library(here)
+library(googlesheets)
+library(GenomicRanges)
+library(lazyeval)
+
+knitr::opts_knit$set(root.dir = here())
+knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+```
+
+1. Read in the google sheet key (link [here](https://docs.google.com/spreadsheets/d/10QTjn6EFq0yrr9XoCK62qgaiQX6i1T7dqQqtzAkhVno/edit?usp=sharing)) and additional metadata about these single cells. Metadata obtained from Elaine Maggi and from Ginkgo output (January 2018).
+```{r}
+pldyk <- gs_title("single_cell_wgs_ploidy")
+pldyk2 <- gs_read(ss=pldyk, ws = "Sheet4") #283 single cells, unfiltered
+pldyk3 <- pldyk2 %>% 
+  mutate(smpl = gsub("-", ".", file_name, fixed=T)) %>%
+  separate(smpl, into = c("smpl", "toRm"), sep=".bed") %>%
+  ## if the column begins with a number, add an X to the beginning of it.
+  ## this is to match the column names output by Ginkgo
+  mutate(smpl_1chr = if_else(is.na(as.numeric(substr(smpl, 1,1))), "", "X")) %>%
+  mutate(smpl = paste0(smpl_1chr,smpl,sep="")) %>%
+  select(-toRm, -smpl_1chr)
+  
+## 1/16/2018: Manually renamed T-13 to T13-3.bed (row 130 on google sheet) 
+## to avoid duplicates and to be consistent with the Trisomy 13 system. I
+## renamed my raw bam and bed T13 files as well to T13-3 using unix.
+
+## moved the following statements to comments 
+## (to avoid having these read in as separate columns)
+## s33oldtube.bed - This cell was amplified with some of the samples from run2
+## fish_fixed column: "Green cells were FISH fixed prior to amplification". 1 if true.
+
+#read in ginkgo stats, copy-pasted using datapasta
+source(here("scripts", "gkStats.R"))
+#gkStats is a tibble with metadata from ginkgo run
+```
+
+
+2. Read in and munge the ginkgo count data. Summarize the data by class (12 class total), and display the counts for the unique states. Here, I use the "Integer copy-number state for each cell at every bin position; rows = bins, columns = cells". This file is saved as "2018_01_17_ginkgo_cnv_all.txt"
+```{r}
+## Copy Number: Integer copy-number state for each cell 
+## at every bin position; rows = bins, columns = cells
+## 
+## gnk is a matrix where the first 3 columns are the coordinates,
+## and the rest of the columns are cells. 2 = diploid, anything other than 2
+## indicates gain or loss of chromosome.
+gnk <- read_tsv(here("raw_data", "2018_01_17_ginkgo_cnv_all.txt"))#, header=T)
+
+gnk.sam <- gnk %>% 
+  gather(key = smpl, value=cp_nm, 4:ncol(.)) %>% 
+  separate(CHR, c("chrRm", "chr"), sep=3) %>% 
+  dplyr::select(-chrRm) %>% 
+  filter(chr != "Y") %>% 
+  mutate(chr = factor(chr, levels=c(1:22, "X"))) %>%
+  left_join(pldyk3, by = "smpl") %>%
+  left_join(gkStats, by = "smpl")
+#write_tsv(gnk.sam, path = here("processed_data", "gnk_sam.txt"))
+
+gnk.t <- gnk %>% 
+  gather(key = smpl, value=cp_nm, 4:ncol(.)) %>% 
+  group_by(CHR, smpl) %>% 
+  summarise(avg = mean(cp_nm)) %>% 
+  mutate(avgRound = round(avg)) %>%
+  mutate(avgRound = ifelse(avgRound > 2, 1, ifelse(avgRound == 2, 0, -1))) %>%
+  separate(CHR, c("chrRm", "chr"), sep=3) %>% 
+  dplyr::select(-chrRm) %>% 
+  filter(chr != "Y") %>% 
+  mutate(chr = factor(chr, levels=c(1:22, "X")), 
+         avgRound=factor(avgRound)) %>%
+  left_join(pldyk3, by = "smpl") %>%
+  left_join(gkStats, by = "smpl")
+
+#now, look only at the unique states within each of the 12 classes
+gnk.c <- gnk.t %>%
+  mutate(clMg = paste(class, numbXtraChr_chr, sep="_")) %>%
+  dplyr::select(avgRound, chr, clMg, smpl) %>%
+  spread(chr, avgRound)
+
+table(gnk.c$clMg)
+
+gnk.u <- gnk.c %>% 
+  group_by(clMg)  %>%
+  unite(colPaste, -clMg, -smpl, remove = FALSE) %>%
+  count(colPaste) %>%
+  mutate(prop = n / sum(n)) %>%
+  separate(colPaste, c(1:22, "X"), sep = "_") %>%
+  ungroup() %>%
+  mutate(clMg = paste(row_number(), clMg, sep="_")) %>%
+  gather(key = chr, value=chr_freq, 2:(ncol(.)-1)) %>%
+  mutate(chr= factor(chr, levels=c(1:22, "X", "n"))) %>%
+  mutate(clMg = factor(clMg, levels=rev(unique(clMg)[c(10:6, 
+              48:42, 52:49, 35:18, 5, 41:36, 17:11, 4:1)]))) %>%
+  mutate(chr_freq = as.numeric(chr_freq)) 
+```
+
+3. Plot the summary of the chromosomal states
+```{r}
+ggplot(filter(gnk.u, chr %in% c(1:22,"X")), aes(x=chr, y=clMg, fill=factor(chr_freq))) + geom_tile(color = "white", size = 1) + scale_fill_brewer(type = "div",palette = "RdBu",drop=FALSE, direction = -1, name = "Copy Number") +
+  theme_classic() + theme(axis.ticks = element_blank(),
+                          axis.line = element_blank(),
+                          axis.text.x = element_text(size= 8),
+                          axis.text.y = element_text(vjust=0.3, hjust = 1)) +
+  coord_fixed(ratio = 1) + xlab("Chromosome") + ylab("")
+
+ggplot(filter(gnk.u, chr == "n"), aes(x=chr, y=clMg, fill=prop)) + geom_tile(color = "white", size = 1) + scale_fill_gradient(low = "white", high = "black" ) +
+  theme_classic() + theme(axis.ticks = element_blank(),
+                          axis.line = element_blank(),
+                          axis.text.x = element_text(size= 8),
+                          axis.text.y = element_text(vjust=0.3, hjust = 1)) +
+  coord_fixed(ratio = 1) + xlab("Chromosome") + ylab("")
+
+```
+
