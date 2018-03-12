@@ -97,6 +97,7 @@ gnk.c <- gnk.t %>%
   dplyr::select(avgRound, chr, clMg, smpl) %>%
   spread(chr, avgRound)
 
+
 table(gnk.c$clMg)
 
 gnk.u <- gnk.c %>% 

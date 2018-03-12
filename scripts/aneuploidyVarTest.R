@@ -1,6 +1,8 @@
 ## run script ginkgo_aneupl_calls.Rmd first
-load("gnk.RData") # file is 2KB. I saved it after generating matrix using code in ginkgo_aneupl_calls.Rmd
-load("gnk.c.RData")
+library(here)
+library(tidyverse)
+load(here("raw_data", "gnk.RData")) # file is 2KB. I saved it after generating matrix using code in ginkgo_aneupl_calls.Rmd
+load(here("raw_data","gnk.c.RData"))
 gnk.u_DF <- as.data.frame(gnk.u)
 gnk.c_DF <- as.data.frame(gnk.c)
 # do test for senescent samples first
@@ -65,6 +67,7 @@ for(i in 1:23) {
 }
 names(pVals_allChroms) <- c(paste("chr",1:22,sep=""),"chrX")
 sig_0.05_chromNums <- which(pVals_allChroms < 0.05)
+pVals_allChroms %>% p.adjust(method = "BH") %>% sort
 print(sig_0.05_chromNums)
 #chr7 chr15 chr17 chr18 chr19 chr20  chrX
 #7    15    17    18    19    20    23
