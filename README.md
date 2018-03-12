@@ -1,7 +1,7 @@
 # aneuploidyVariabilityTest
 Create a test to see if chromosome 18 is duplicated or removed more often than other chromosomes.
 
-## To do
+## To do (3/18/2018)
 
 1. Change resampling method to *bootstrap* 
 	- take N samples *with replacement*, where N is the the number of cells.
@@ -24,3 +24,7 @@ Create a test to see if chromosome 18 is duplicated or removed more often than o
 
 6. Use association rules to determine multiple regions that are co-deleted or co-amplified
 	- See "mining of massive datasets," Chapter 6.1
+
+Brainstorming on 3/18/2018:
+
+![](images/2018_03_12_brainstorm.jpg)
