@@ -22,6 +22,51 @@ rowSums(gnk.c_sen_abs)/ncol(gnk.c_sen_abs)
 
 nullDist_freq_each_chrom <- colSums(gnk.c_sen_abs)/nrow(gnk.c_sen_abs) # 23 numbers, one for each chrom
 
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+library(BSgenome.Hsapiens.UCSC.hg19)
+library(tidyverse)
+library(ggrepel)
+
+chrs <- paste0("chr", c(1:22, "X"))
+chr_lens <- seqlengths(BSgenome.Hsapiens.UCSC.hg19) %>% 
+  .[chrs] %>% 
+  set_names(substr(names(.), 4, nchar(.)))
+
+genes_per_chr <- genes(TxDb.Hsapiens.UCSC.hg19.knownGene) %>% 
+  data.frame() %>% 
+  as_tibble() %>%
+  filter(seqnames %in% chrs) %>%
+  group_by(seqnames) %>%
+  count() %>%
+  ungroup %>%
+  mutate(seqnames = as.character(seqnames),
+         chr= substr(seqnames, 4, nchar(seqnames))) %>%
+  dplyr::select(-seqnames) #%>% 
+  #rename(nGenes = n)
+
+chr_tbl <- data.frame(len=chr_lens, 
+  aneuFreqSen=nullDist_freq_each_chrom) %>%
+  rownames_to_column("chr") %>%
+  as_tibble() %>%
+  left_join(genes_per_chr, by="chr") %>%
+  mutate(genes_per_mb = n/len * 1e6,
+         trisomy = chr %in% c("13", "18", "21"))
+  
+
+ggplot(chr_tbl, aes(x = aneuFreqSen, y = genes_per_mb, color=trisomy)) + geom_point()
+
+ggplot(chr_tbl, aes(x = aneuFreqSen, y = len, color=trisomy, size=n)) + 
+  geom_point(alpha=0.5) + theme_classic() + geom_text_repel(aes(label=chr))
+
+ggplot(chr_tbl, aes(x = aneuFreqSen, y = n, color=trisomy)) + 
+  geom_point(alpha=0.5, aes(size=len)) + 
+  theme_classic() + 
+  geom_text_repel(aes(label=chr)) + 
+  xlab("Frequency of Aneuploidy") + 
+  ylab("Number of Genes") + 
+  ggtitle("Aneuploidy in Senescent Cells by Chromosome")
+
+
 # for chromosome 18 do 100 bootsraps to select random samples, and then take average
 set.seed(1)
 chrom_18_aneuploidyFreq <- NULL

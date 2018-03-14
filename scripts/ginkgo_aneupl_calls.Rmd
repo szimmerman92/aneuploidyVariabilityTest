@@ -96,7 +96,7 @@ gnk.c <- gnk.t %>%
   mutate(clMg = paste(class, numbXtraChr_chr, sep="_")) %>%
   dplyr::select(avgRound, chr, clMg, smpl) %>%
   spread(chr, avgRound)
-
+save(gnk.c, file = here("raw_data", "gnk.c.RData"))
 
 table(gnk.c$clMg)
 
@@ -113,6 +113,8 @@ gnk.u <- gnk.c %>%
   mutate(clMg = factor(clMg, levels=rev(unique(clMg)[c(10:6, 
               48:42, 52:49, 35:18, 5, 41:36, 17:11, 4:1)]))) %>%
   mutate(chr_freq = as.numeric(chr_freq)) 
+save(gnk.u, file = here("raw_data", "gnk.RData"))
+
 ```
 
 3. Plot the summary of the chromosomal states
